@@ -106,7 +106,7 @@ class RestoreOperation:
                         'repository_name': repo.name,
                         'manifest_digest': manifest_digest,
                         'blob_digest': blob_digest,
-                        'cas_path': f"sha256/{blob_digest[:2]}/{blob_digest[2:4]}/{blob_digest}"
+                        'cas_path': f"sha256/{blob_digest[:2]}/{blob_digest}"
                     })
         
         return self._deduplicate_blobs(blobs_to_restore)
