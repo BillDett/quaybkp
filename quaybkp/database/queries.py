@@ -67,13 +67,13 @@ class QuayQueries:
     
     def get_blob_storage_info(self, blob_uuid: str) -> Optional[Dict[str, Any]]:
         """Get storage details for a blob."""
+        # TODO: Add back in "AND ist.uploading = false"?
         query = """
         SELECT ist.uuid, ist.image_size, ist.content_checksum, ist.cas_path,
                isp.location_id
         FROM imagestorage ist
         LEFT JOIN imagestorageplacement isp ON ist.id = isp.storage_id
         WHERE ist.uuid = %s
-        AND ist.uploading = false
         """
         
         with self.db.get_cursor() as cursor:
@@ -82,6 +82,7 @@ class QuayQueries:
     
     def get_all_namespace_blobs(self, namespace_id: int) -> List[Dict[str, Any]]:
         """Get all unique blobs for a namespace with repository/manifest context."""
+        # TODO: Add back in "AND ist.uploading = false"?
         query = """
         SELECT DISTINCT 
             r.id as repository_id,
@@ -89,7 +90,7 @@ class QuayQueries:
             m.id as manifest_id,
             m.digest as manifest_digest,
             ist.uuid as blob_uuid,
-            ist.checksum as blob_digest,
+            ist.content_checksum as blob_digest,
             ist.image_size,
             ist.cas_path
         FROM "user" u
@@ -99,7 +100,6 @@ class QuayQueries:
         JOIN imagestorage ist ON mb.blob_id = ist.id
         WHERE u.id = %s
         AND r.state = 0  -- NORMAL state
-        AND ist.uploading = false
         ORDER BY r.name, m.digest, ist.uuid
         """
         
