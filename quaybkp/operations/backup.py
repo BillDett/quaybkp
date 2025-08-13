@@ -68,7 +68,7 @@ class BackupOperation:
                             'repository_name': repo['name'],
                             'manifest_digest': manifest_digest,
                             'blob_digest': blob_digest,
-                            'cas_path': f"sha256/{blob_digest[:2]}/{blob_digest[2:4]}/{blob_digest}"
+                            'cas_path': f"sha256/{blob_digest[:2]}/{blob_digest}"
                         })
             
             unique_blobs = self._deduplicate_blobs(all_blobs)
@@ -122,11 +122,12 @@ class BackupOperation:
         manifest_blobs = {}
         
         for manifest in manifests:
+            logger.info(f"Getting blobs for manifest {manifest['id']}")
             blobs = self.queries.get_manifest_blobs(manifest['id'])
             blob_digests = []
             
             for blob in blobs:
-                blob_digest = blob['checksum']
+                blob_digest = blob['content_checksum']
                 if blob_digest.startswith('sha256:'):
                     blob_digest = blob_digest[7:]
                 blob_digests.append(blob_digest)
@@ -135,7 +136,7 @@ class BackupOperation:
             for child in child_manifests:
                 child_blobs = self.queries.get_manifest_blobs(child['id'])
                 for blob in child_blobs:
-                    blob_digest = blob['checksum']
+                    blob_digest = blob['content_checksum']
                     if blob_digest.startswith('sha256:'):
                         blob_digest = blob_digest[7:]
                     blob_digests.append(blob_digest)

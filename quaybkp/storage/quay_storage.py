@@ -32,9 +32,9 @@ class QuayStorage:
             
             if driver_name == 'LocalStorage':
                 backend_info['storage_path'] = driver_config.get('storage_path', '/datastorage/registry')
-            elif driver_name in ['S3Storage', 'CloudFrontedS3Storage']:
+            elif driver_name in ['S3Storage', 'CloudFrontedS3Storage', 'RadosGWStorage', 'CephStorage']:
                 backend_info['client'] = self._create_s3_client(driver_config)
-                backend_info['bucket'] = driver_config.get('s3_bucket')
+                backend_info['bucket'] = driver_config.get('s3_bucket') or driver_config.get('bucket_name')
                 backend_info['storage_path'] = driver_config.get('storage_path', '/datastorage/registry')
             elif driver_name == 'GoogleCloudStorage':
                 backend_info['bucket'] = driver_config.get('bucket_name')
@@ -48,15 +48,45 @@ class QuayStorage:
         return backends
     
     def _create_s3_client(self, driver_config: Dict[str, Any]):
-        """Create S3 client from driver configuration."""
+        """Create S3-compatible client from driver configuration."""
+        # Handle both standard S3 and Ceph/RadosGW configurations
+        access_key = (driver_config.get('s3_access_key') or 
+                     driver_config.get('access_key') or 
+                     driver_config.get('ceph_access_key'))
+        secret_key = (driver_config.get('s3_secret_key') or 
+                     driver_config.get('secret_key') or 
+                     driver_config.get('ceph_secret_key'))
+        
         s3_config = {
-            'aws_access_key_id': driver_config.get('s3_access_key'),
-            'aws_secret_access_key': driver_config.get('s3_secret_key'),
+            'aws_access_key_id': access_key,
+            'aws_secret_access_key': secret_key,
             'region_name': driver_config.get('s3_region', 'us-east-1')
         }
         
+        # Handle endpoint configuration for Ceph/RadosGW
+        endpoint_url = None
         if driver_config.get('host'):
-            s3_config['endpoint_url'] = f"https://{driver_config['host']}"
+            # Standard S3 host configuration
+            endpoint_url = f"https://{driver_config['host']}"
+        elif driver_config.get('ceph_endpoint'):
+            # Ceph-specific endpoint
+            endpoint_url = driver_config['ceph_endpoint']
+        elif driver_config.get('hostname'):
+            # RadosGW hostname configuration
+            port = driver_config.get('port', 443)
+            is_secure = driver_config.get('is_secure', True)
+            protocol = 'https' if is_secure else 'http'
+            if port in [80, 443]:
+                endpoint_url = f"{protocol}://{driver_config['hostname']}"
+            else:
+                endpoint_url = f"{protocol}://{driver_config['hostname']}:{port}"
+        
+        if endpoint_url:
+            s3_config['endpoint_url'] = endpoint_url
+        
+        # Handle path-style access for Ceph/RadosGW
+        if driver_config.get('calling_format') == 'path' or driver_config.get('path_style', False):
+            s3_config['config'] = boto3.session.Config(s3={'addressing_style': 'path'})
         
         return boto3.client('s3', **s3_config)
     
@@ -94,7 +124,7 @@ class QuayStorage:
             
             if driver == 'LocalStorage':
                 return self._read_blob_local(cas_path, backend)
-            elif driver in ['S3Storage', 'CloudFrontedS3Storage']:
+            elif driver in ['S3Storage', 'CloudFrontedS3Storage', 'RadosGWStorage', 'CephStorage']:
                 return self._read_blob_s3(cas_path, backend)
             elif driver == 'GoogleCloudStorage':
                 return self._read_blob_gcs(cas_path, backend)
@@ -167,7 +197,7 @@ class QuayStorage:
             
             if driver == 'LocalStorage':
                 return self._write_blob_local(cas_path, blob_data, backend)
-            elif driver in ['S3Storage', 'CloudFrontedS3Storage']:
+            elif driver in ['S3Storage', 'CloudFrontedS3Storage', 'RadosGWStorage', 'CephStorage']:
                 return self._write_blob_s3(cas_path, blob_data, backend)
             elif driver == 'GoogleCloudStorage':
                 return self._write_blob_gcs(cas_path, blob_data, backend)
@@ -242,7 +272,7 @@ class QuayStorage:
             if driver == 'LocalStorage':
                 blob_path = self._construct_blob_path(cas_path, backend['storage_path'])
                 return os.path.exists(blob_path)
-            elif driver in ['S3Storage', 'CloudFrontedS3Storage']:
+            elif driver in ['S3Storage', 'CloudFrontedS3Storage', 'RadosGWStorage', 'CephStorage']:
                 object_key = self._construct_object_key(cas_path, backend['storage_path'])
                 try:
                     backend['client'].head_object(Bucket=backend['bucket'], Key=object_key)

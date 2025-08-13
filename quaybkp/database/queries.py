@@ -25,9 +25,9 @@ class QuayQueries:
     def get_namespace_repositories(self, namespace_id: int) -> List[Dict[str, Any]]:
         """Get all repositories for a namespace."""
         query = """
-        SELECT id, name, namespace_user, visibility, description
+        SELECT id, name, namespace_user_id, visibility_id, description
         FROM repository 
-        WHERE namespace_user = %s
+        WHERE namespace_user_id = %s
         AND state = 0  -- NORMAL state
         ORDER BY name
         """
@@ -39,7 +39,7 @@ class QuayQueries:
     def get_repository_manifests(self, repository_id: int) -> List[Dict[str, Any]]:
         """Get all manifests for a repository."""
         query = """
-        SELECT id, repository_id, digest, media_type
+        SELECT id, repository_id, digest, media_type_id
         FROM manifest 
         WHERE repository_id = %s
         ORDER BY id
@@ -51,13 +51,14 @@ class QuayQueries:
     
     def get_manifest_blobs(self, manifest_id: int) -> List[Dict[str, Any]]:
         """Get all blobs for a manifest via ManifestBlob relationship."""
+        # TODO: Should we be checking imagestorage.uploading column as well?
+        #  e.g. "AND ist.uploading = false"
         query = """
-        SELECT mb.blob_id, ist.uuid, ist.image_size, ist.checksum, ist.uploading, ist.cas_path
+        SELECT mb.blob_id, ist.uuid, ist.image_size, ist.content_checksum, ist.uploading, ist.cas_path
         FROM manifestblob mb
         JOIN imagestorage ist ON mb.blob_id = ist.id
         WHERE mb.manifest_id = %s
-        AND ist.uploading = false
-        ORDER BY mb.blob_index
+        ORDER BY mb.blob_id
         """
         
         with self.db.get_cursor() as cursor:
@@ -67,8 +68,8 @@ class QuayQueries:
     def get_blob_storage_info(self, blob_uuid: str) -> Optional[Dict[str, Any]]:
         """Get storage details for a blob."""
         query = """
-        SELECT ist.uuid, ist.image_size, ist.checksum, ist.cas_path,
-               isp.location_id, isp.storage_metadata
+        SELECT ist.uuid, ist.image_size, ist.content_checksum, ist.cas_path,
+               isp.location_id
         FROM imagestorage ist
         LEFT JOIN imagestorageplacement isp ON ist.id = isp.storage_id
         WHERE ist.uuid = %s
@@ -92,7 +93,7 @@ class QuayQueries:
             ist.image_size,
             ist.cas_path
         FROM "user" u
-        JOIN repository r ON u.id = r.namespace_user
+        JOIN repository r ON u.id = r.namespace_user_id
         JOIN manifest m ON r.id = m.repository_id
         JOIN manifestblob mb ON m.id = mb.manifest_id
         JOIN imagestorage ist ON mb.blob_id = ist.id
@@ -109,7 +110,7 @@ class QuayQueries:
     def get_manifest_child_manifests(self, manifest_id: int) -> List[Dict[str, Any]]:
         """Get child manifests for a manifest list."""
         query = """
-        SELECT cm.id, cm.digest, cm.media_type
+        SELECT cm.id, cm.digest, cm.media_type_id
         FROM manifest cm
         JOIN manifestchild mc ON cm.id = mc.child_manifest_id
         WHERE mc.manifest_id = %s

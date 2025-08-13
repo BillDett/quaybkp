@@ -130,7 +130,7 @@ class S3Backend:
     
     def blob_exists(self, namespace_prefix: str, blob_digest: str) -> bool:
         """Check if blob exists in backup storage."""
-        blob_key = f"{namespace_prefix}/blob/{blob_digest[:2]}/{blob_digest}"
+        blob_key = f"{namespace_prefix}/sha256/{blob_digest[:2]}/{blob_digest}"
         try:
             self.client.head_object(Bucket=self.bucket_name, Key=blob_key)
             return True
@@ -141,7 +141,7 @@ class S3Backend:
     
     def upload_blob(self, namespace_prefix: str, blob_digest: str, blob_data: bytes):
         """Upload blob to backup storage."""
-        blob_key = f"{namespace_prefix}/blob/{blob_digest[:2]}/{blob_digest}"
+        blob_key = f"{namespace_prefix}/sha256/{blob_digest[:2]}/{blob_digest}"
         self.client.put_object(
             Bucket=self.bucket_name,
             Key=blob_key,
@@ -151,7 +151,7 @@ class S3Backend:
     
     def download_blob(self, namespace_prefix: str, blob_digest: str) -> bytes:
         """Download blob from backup storage."""
-        blob_key = f"{namespace_prefix}/blob/{blob_digest[:2]}/{blob_digest}"
+        blob_key = f"{namespace_prefix}/sha256/{blob_digest[:2]}/{blob_digest}"
         try:
             response = self.client.get_object(Bucket=self.bucket_name, Key=blob_key)
             return response['Body'].read()

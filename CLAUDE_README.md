@@ -60,6 +60,7 @@ The tool consists of several key components:
 - **Multi-Storage Backend Support**: Works with Quay's distributed storage including:
   - Local filesystem storage
   - S3-compatible object storage (S3, CloudFront S3)
+  - Ceph/RadosGW object storage (S3-compatible)
   - Google Cloud Storage
   - Azure Blob Storage
 - **Concurrent Processing**: Multi-threaded blob transfers for better performance
@@ -95,8 +96,65 @@ The codebase follows a modular architecture:
 
 - `config/`: Configuration management
 - `database/`: Database connections and queries
-- `storage/`: S3 and Quay storage interfaces
+- `storage/`: Multi-backend storage interfaces (Local, S3, Ceph/RadosGW, GCS, Azure)
 - `operations/`: High-level operations (backup, restore, etc.)
 - `workers/`: Concurrent blob processing
 - `models/`: Data models for inventory and namespace objects
 - `utils/`: Logging and progress reporting utilities
+
+## Supported Quay Storage Configurations
+
+The tool supports various Quay storage configurations:
+
+### Local Storage
+```yaml
+DISTRIBUTED_STORAGE_CONFIG:
+  local:
+    - LocalStorage
+    - storage_path: /datastorage/registry
+```
+
+### S3 Storage
+```yaml
+DISTRIBUTED_STORAGE_CONFIG:
+  s3:
+    - S3Storage
+    - s3_bucket: my-quay-bucket
+      s3_access_key: ACCESS_KEY
+      s3_secret_key: SECRET_KEY
+      storage_path: /datastorage/registry
+```
+
+### Ceph/RadosGW Storage
+```yaml
+DISTRIBUTED_STORAGE_CONFIG:
+  ceph:
+    - RadosGWStorage
+    - bucket_name: my-quay-bucket
+      hostname: ceph.example.com
+      port: 8080
+      is_secure: false
+      access_key: ACCESS_KEY
+      secret_key: SECRET_KEY
+      path_style: true
+      storage_path: /datastorage/registry
+```
+
+### Google Cloud Storage
+```yaml
+DISTRIBUTED_STORAGE_CONFIG:
+  gcs:
+    - GoogleCloudStorage
+    - bucket_name: my-quay-bucket
+      storage_path: /datastorage/registry
+```
+
+### Azure Blob Storage
+```yaml
+DISTRIBUTED_STORAGE_CONFIG:
+  azure:
+    - AzureStorage
+    - azure_container: my-quay-container
+      azure_connection_string: "CONNECTION_STRING"
+      storage_path: /datastorage/registry
+```
