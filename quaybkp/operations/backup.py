@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class BackupOperation:
     """Handles backup operations for Quay namespaces."""
     
-    def __init__(self, config: Config, bucket_name: str = "quaybackup"):
+    def __init__(self, config: Config, bucket_name: str):
         self.config = config
         self.db_connection = DatabaseConnection(config)
         self.queries = QuayQueries(self.db_connection)

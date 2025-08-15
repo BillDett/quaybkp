@@ -11,7 +11,7 @@ from ..config.settings import Config
 class S3Backend:
     """S3 storage backend for backups."""
     
-    def __init__(self, config: Config, bucket_name: str = "quaybackup"):
+    def __init__(self, config: Config, bucket_name: str):
         self.config = config
         self.bucket_name = bucket_name
         self._client = None
@@ -45,7 +45,8 @@ class S3Backend:
     
     def get_namespace_prefix(self, namespace_id: str, namespace_name: str) -> str:
         """Get S3 prefix for namespace."""
-        return f"{namespace_id}-{namespace_name}"
+        #return f"{namespace_id}-{namespace_name}"
+        return f"{namespace_name}"
     
     def check_lock_exists(self, namespace_prefix: str) -> bool:
         """Check if backup lock file exists."""

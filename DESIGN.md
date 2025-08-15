@@ -87,7 +87,7 @@ The tool operates on a single Quay namespace at a time. From the backup, it can 
 
 In the backup S3, a bucket called `quaybackup` (or whatever is provided by the `--bucket-name` option) is created if it does not exist. The bucket contains all of the image blobs owned by the namespace, along with a set of backup inventory files that are created at the time of each backup.
 
-All resources in the backup bucket are prefaced with the id and name of the namespace as found in Quay's `user` table.
+All resources in the backup bucket are prefaced with the name of the namespace as found in Quay's `user` table.
 
 Each inventory file is named according to the monotonically increasing backup number. The highest numbered inventory file corresponds to the latest backup performed. Inventory files are prefaced with `backup/` to make them easier to list in the bucket.
 
@@ -98,12 +98,12 @@ Image blobs are prefaced with `sha256/` and the first two significant digits of 
 For example:
 
     quaybackup
-            392-openshift-release-dev/backup/lock
-            392-openshift-release-dev/backup/1.json
-            392-openshift-release-dev/backup/2.json
-            392-openshift-release-dev/backup/3.json
-            392-openshift-release-dev/sha256/99/99e349980bc1457ce7b7b954f41f5a99cc6968e5a06c0839baff26a3d76e7451
-            392-openshift-release-dev/sha256/00/00c6ae7a48f2a1e04cd9354ea2dc928b1c865ffc3cf90e13552de6991cbccf74
+            openshift-release-dev/backup/lock
+            openshift-release-dev/backup/1.json
+            openshift-release-dev/backup/2.json
+            openshift-release-dev/backup/3.json
+            openshift-release-dev/sha256/99/99e349980bc1457ce7b7b954f41f5a99cc6968e5a06c0839baff26a3d76e7451
+            openshift-release-dev/sha256/00/00c6ae7a48f2a1e04cd9354ea2dc928b1c865ffc3cf90e13552de6991cbccf74
 
 Blobs in the backup bucket are never removed, even if a blob is removed from Quay's storage. This is intentional to keep the backup tool as simple as possible. At some point in the future a `prune` command could be issued that would remove any blobs not found in the latest inventory file.
 

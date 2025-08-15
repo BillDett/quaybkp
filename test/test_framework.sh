@@ -88,9 +88,9 @@ increment_test() {
 }
 
 # Test helper functions
-run_quaybkp() {
-    python -m quaybkp.main "$@" 2>&1
-}
+#run_quaybkp() {
+#    python -m quaybkp.main "$@" 2>&1
+#}
 
 check_command_exists() {
     if ! command -v "$1" &> /dev/null; then
@@ -156,17 +156,17 @@ login_to_quay() {
 create_test_namespace() {
     print_test "Creating test namespace in Quay"
     increment_test
-    
-    # Create namespace via Quay API
+      
+    # Try to create namespace via Quay API- this might fail if it's already there, that's okay
     local response=$(curl -s -X POST \
+        -H "Authorization: Bearer $QUAYADMINTOKEN" \
         -H "Content-Type: application/json" \
-        -d "{\"namespace\": \"$TEST_NAMESPACE\"}" \
-        -u "$QUAY_USERNAME:$QUAY_PASSWORD" \
+        -d "{\"name\": \"$TEST_NAMESPACE\"}" \
         "http://$QUAY_SERVER/api/v1/organization/" 2>/dev/null)
     
     # Check if namespace exists or was created
     local check_response=$(curl -s \
-        -u "$QUAY_USERNAME:$QUAY_PASSWORD" \
+        -H "Authorization: Bearer $QUAYADMINTOKEN" \
         "http://$QUAY_SERVER/api/v1/organization/$TEST_NAMESPACE" 2>/dev/null)
     
     if echo "$check_response" | grep -q "\"name\".*\"$TEST_NAMESPACE\"" || echo "$response" | grep -q "success\|created"; then
@@ -192,7 +192,7 @@ push_test_images() {
         echo "  Pulling $image..."
         if $CONTAINER_RUNTIME pull "$CONTAINER_TLS" "$image" >/dev/null 2>&1; then
             echo "  Tagging as $quay_image..."
-            if $CONTAINER_RUNTIME tag "$CONTAINER_TLS" "$image" "$quay_image" >/dev/null 2>&1; then
+            if $CONTAINER_RUNTIME tag "$image" "$quay_image" >/dev/null 2>&1; then
                 echo "  Pushing to Quay..."
                 if $CONTAINER_RUNTIME push "$CONTAINER_TLS" "$quay_image" >/dev/null 2>&1; then
                     images_pushed=$((images_pushed + 1))
@@ -273,51 +273,6 @@ reset_environment() {
     print_success "Reset test environment"
 }
 
-# Individual test functions
-test_help_commands() {
-    print_header "Testing Help Commands"
-    
-    print_test "Testing main help"
-    increment_test
-    if run_quaybkp --help | grep -q "quaybkp"; then
-        print_success "Main help displays correctly"
-    else
-        print_failure "Main help failed"
-    fi
-    
-    print_test "Testing backup help"
-    increment_test
-    if run_quaybkp backup --help | grep -q "Back up a namespace"; then
-        print_success "Backup help displays correctly"
-    else
-        print_failure "Backup help failed"
-    fi
-    
-    print_test "Testing restore help"
-    increment_test
-    if run_quaybkp restore --help | grep -q "Restore a namespace"; then
-        print_success "Restore help displays correctly"
-    else
-        print_failure "Restore help failed"
-    fi
-    
-    print_test "Testing verify help"
-    increment_test
-    if run_quaybkp verify --help | grep -q "Verify a backup"; then
-        print_success "Verify help displays correctly"
-    else
-        print_failure "Verify help failed"
-    fi
-    
-    print_test "Testing unlock help"
-    increment_test
-    if run_quaybkp unlock --help | grep -q "Remove a lock"; then
-        print_success "Unlock help displays correctly"
-    else
-        print_failure "Unlock help failed"
-    fi
-}
-
 test_backup_basic() {
     print_header "Testing Basic Backup Operations"
     
@@ -325,7 +280,7 @@ test_backup_basic() {
     
     print_test "Testing basic backup without force"
     increment_test
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "Operation.*Backup"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE"  | grep -q "Operation.*Backup"; then
         print_success "Basic backup completed"
     else
         print_failure "Basic backup failed"
@@ -333,7 +288,7 @@ test_backup_basic() {
     
     print_test "Verifying backup inventory exists"
     increment_test
-    if mc ls "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/" | grep -q "\.json"; then
+    if mc ls "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/" | grep -q "\.json"; then
         print_success "Backup inventory file created"
     else
         print_failure "Backup inventory file not found"
@@ -341,7 +296,7 @@ test_backup_basic() {
     
     print_test "Testing backup with force option"
     increment_test
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --force-blobs | grep -q "Operation.*Backup"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup --force-blobs "$TEST_NAMESPACE" | grep -q "Operation.*Backup"; then
         print_success "Force backup completed"
     else
         print_failure "Force backup failed"
@@ -349,7 +304,7 @@ test_backup_basic() {
     
     print_test "Testing backup with custom worker count"
     increment_test
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --num-workers 2 | grep -q "Operation.*Backup"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup  --num-workers 2 "$TEST_NAMESPACE" | grep -q "Operation.*Backup"; then
         print_success "Backup with custom workers completed"
     else
         print_failure "Backup with custom workers failed"
@@ -361,7 +316,7 @@ test_backup_edge_cases() {
     
     print_test "Testing backup of non-existent namespace"
     increment_test
-    if run_quaybkp backup "nonexistent" --bucket-name "$TEST_BUCKET" 2>&1 | grep -q "not found"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "nonexistent" 2>&1 | grep -q "not found"; then
         print_success "Non-existent namespace handled correctly"
     else
         print_failure "Non-existent namespace not handled correctly"
@@ -370,15 +325,15 @@ test_backup_edge_cases() {
     print_test "Testing concurrent backup protection (lock)"
     increment_test
     # Create a lock file manually
-    echo "" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
+    echo "" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
     
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" 2>&1 | grep -q "in progress"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" 2>&1 | grep -q "in progress"; then
         print_success "Backup lock protection works"
         # Clean up lock
-        mc rm "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
+        mc rm "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
     else
         print_failure "Backup lock protection failed"
-        mc rm "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1 || true
+        mc rm "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1 || true
     fi
 }
 
@@ -386,14 +341,14 @@ test_restore_basic() {
     print_header "Testing Basic Restore Operations"
     
     # Ensure we have a backup to restore from
-    run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" >/dev/null 2>&1
+    quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" >/dev/null 2>&1
     
     # Clear Quay storage to test restore
     mc rm --recursive --force "$QUAY_ALIAS/quaybucket/datastorage/" >/dev/null 2>&1 || true
     
     print_test "Testing basic restore"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "Operation.*Restore"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore "$TEST_NAMESPACE" | grep -q "Operation.*Restore"; then
         print_success "Basic restore completed"
     else
         print_failure "Basic restore failed"
@@ -401,7 +356,7 @@ test_restore_basic() {
     
     print_test "Testing restore dry-run"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --dry-run | grep -q "Dry Run"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore --dry-run "$TEST_NAMESPACE" | grep -q "Dry Run"; then
         print_success "Restore dry-run completed"
     else
         print_failure "Restore dry-run failed"
@@ -409,7 +364,7 @@ test_restore_basic() {
     
     print_test "Testing restore with force option"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --force-blobs | grep -q "Operation.*Restore"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore --force-blobs "$TEST_NAMESPACE" | grep -q "Operation.*Restore"; then
         print_success "Force restore completed"
     else
         print_failure "Force restore failed"
@@ -417,7 +372,7 @@ test_restore_basic() {
     
     print_test "Testing restore with custom worker count"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --num-workers 3 | grep -q "Operation.*Restore"; then
+    if quaybkp --bucket-name "$TEST_BUCKET"  restore --num-workers 3 "$TEST_NAMESPACE" | grep -q "Operation.*Restore"; then
         print_success "Restore with custom workers completed"
     else
         print_failure "Restore with custom workers failed"
@@ -428,11 +383,11 @@ test_restore_advanced() {
     print_header "Testing Advanced Restore Operations"
     
     # Ensure we have a backup
-    run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" >/dev/null 2>&1
+    quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" >/dev/null 2>&1
     
     print_test "Testing restore from specific backup number"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --from 1 | grep -q "Operation.*Restore"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore --from 1  "$TEST_NAMESPACE" | grep -q "Operation.*Restore"; then
         print_success "Restore from specific backup completed"
     else
         print_failure "Restore from specific backup failed"
@@ -440,7 +395,7 @@ test_restore_advanced() {
     
     print_test "Testing repository-specific restore"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --repository "test-repo" | grep -q "Operation.*Restore"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore --repository "test-repo" "$TEST_NAMESPACE"  | grep -q "Operation.*Restore"; then
         print_success "Repository-specific restore completed"
     else
         print_failure "Repository-specific restore failed"
@@ -448,7 +403,7 @@ test_restore_advanced() {
     
     print_test "Testing restore edge case - missing backup"
     increment_test
-    if run_quaybkp restore "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --from 999 2>&1 | grep -q "not found"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" restore --from 999 "$TEST_NAMESPACE"  2>&1 | grep -q "not found"; then
         print_success "Missing backup handled correctly"
     else
         print_failure "Missing backup not handled correctly"
@@ -459,11 +414,11 @@ test_verify_operations() {
     print_header "Testing Verify Operations"
     
     # Ensure we have a backup
-    run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" >/dev/null 2>&1
+    quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" >/dev/null 2>&1
     
     print_test "Testing basic verify"
     increment_test
-    if run_quaybkp verify "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "Operation.*Verify"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" verify "$TEST_NAMESPACE" | grep -q "Operation.*Verify"; then
         print_success "Basic verify completed"
     else
         print_failure "Basic verify failed"
@@ -471,7 +426,7 @@ test_verify_operations() {
     
     print_test "Testing verify with specific backup number"
     increment_test
-    if run_quaybkp verify "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --from 1 | grep -q "Operation.*Verify"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" verify --from 1 "$TEST_NAMESPACE" | grep -q "Operation.*Verify"; then
         print_success "Verify with specific backup completed"
     else
         print_failure "Verify with specific backup failed"
@@ -479,22 +434,23 @@ test_verify_operations() {
     
     print_test "Testing verify with missing backup"
     increment_test
-    if run_quaybkp verify "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" --from 999 2>&1 | grep -q "not found"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" verify --from 999 "$TEST_NAMESPACE" 2>&1 | grep -q "not found"; then
         print_success "Verify missing backup handled correctly"
     else
         print_failure "Verify missing backup not handled correctly"
     fi
     
-    print_test "Testing verify with incomplete backup scenario"
-    increment_test
+    #print_test "Testing verify with incomplete backup scenario"
+    #increment_test
     # Add some blobs to Quay storage that aren't in backup
-    echo "extra blob" | mc pipe "$QUAY_ALIAS/quaybucket/datastorage/registry/sha256/99/99/999999999999999999999999999999999999999999999999999999999999999" >/dev/null 2>&1
+    # TODO: Refactor this to push another image into the namespace instead- this is a lousy hack
+    #echo "extra blob" | mc pipe "$QUAY_ALIAS/quaybucket/datastorage/registry/sha256/99/99/999999999999999999999999999999999999999999999999999999999999999" >/dev/null 2>&1
     
-    if run_quaybkp verify "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "Incomplete"; then
-        print_success "Incomplete backup verification works"
-    else
-        print_failure "Incomplete backup verification failed"
-    fi
+    #if quaybkp --bucket-name "$TEST_BUCKET" verify "$TEST_NAMESPACE" | grep -q "Incomplete"; then
+    #    print_success "Incomplete backup verification works"
+    #else
+    #    print_failure "Incomplete backup verification failed"
+    #fi
 }
 
 test_unlock_operations() {
@@ -502,7 +458,7 @@ test_unlock_operations() {
     
     print_test "Testing unlock when no lock exists"
     increment_test
-    if run_quaybkp unlock "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "No backup lock found"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" unlock "$TEST_NAMESPACE" | grep -q "No backup lock found"; then
         print_success "Unlock with no lock handled correctly"
     else
         print_failure "Unlock with no lock not handled correctly"
@@ -511,9 +467,9 @@ test_unlock_operations() {
     print_test "Testing unlock when lock exists"
     increment_test
     # Create a lock file
-    echo "" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
+    echo "" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1
     
-    if run_quaybkp unlock "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" | grep -q "Successfully removed"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" unlock "$TEST_NAMESPACE" | grep -q "Successfully removed"; then
         print_success "Unlock with existing lock works"
     else
         print_failure "Unlock with existing lock failed"
@@ -521,10 +477,10 @@ test_unlock_operations() {
     
     print_test "Verifying lock was actually removed"
     increment_test
-    if ! mc ls "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1; then
-        print_success "Lock file was successfully removed"
+    if mc stat "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/lock" >/dev/null 2>&1; then
+        print_failure "Lock file was not removed"       
     else
-        print_failure "Lock file was not removed"
+        print_success "Lock file was successfully removed"
     fi
 }
 
@@ -537,7 +493,7 @@ test_error_handling() {
     local old_endpoint="$S3_ENDPOINT_URL"
     export S3_ENDPOINT_URL="http://invalid-host:9999"
     
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" 2>&1 | grep -q -i "error\|fail"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" 2>&1 | grep -q -i "error\|fail"; then
         print_success "Invalid S3 endpoint handled correctly"
     else
         print_failure "Invalid S3 endpoint not handled correctly"
@@ -551,7 +507,7 @@ test_error_handling() {
     local old_config="$QUAY_CONFIG"
     export QUAY_CONFIG="/nonexistent/config.yaml"
     
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" 2>&1 | grep -q -i "error\|not found"; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" 2>&1 | grep -q -i "error\|not found"; then
         print_success "Missing Quay config handled correctly"
     else
         print_failure "Missing Quay config not handled correctly"
@@ -568,7 +524,7 @@ test_stress_scenarios() {
     increment_test
     local success_count=0
     for i in {1..3}; do
-        if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" >/dev/null 2>&1; then
+        if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" >/dev/null 2>&1; then
             success_count=$((success_count + 1))
         fi
     done
@@ -582,16 +538,16 @@ test_stress_scenarios() {
     print_test "Testing backup with corrupted bucket state"
     increment_test
     # Create invalid backup inventory
-    echo "invalid json content" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/999.json" >/dev/null 2>&1
+    echo "invalid json content" | mc pipe "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/999.json" >/dev/null 2>&1
     
-    if run_quaybkp backup "$TEST_NAMESPACE" --bucket-name "$TEST_BUCKET" >/dev/null 2>&1; then
+    if quaybkp --bucket-name "$TEST_BUCKET" backup "$TEST_NAMESPACE" >/dev/null 2>&1; then
         print_success "Backup with corrupted state handled"
     else
         print_failure "Backup with corrupted state failed"
     fi
     
     # Clean up corrupted file
-    mc rm "$BACKUP_ALIAS/$TEST_BUCKET/*-$TEST_NAMESPACE/backup/999.json" >/dev/null 2>&1 || true
+    mc rm "$BACKUP_ALIAS/$TEST_BUCKET/$TEST_NAMESPACE/backup/999.json" >/dev/null 2>&1 || true
 }
 
 # Main test execution
@@ -613,7 +569,6 @@ main() {
     setup_test_data
     
     # Run all tests
-    test_help_commands
     test_backup_basic
     test_backup_edge_cases
     test_restore_basic

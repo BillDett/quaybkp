@@ -61,6 +61,8 @@ Before running tests, ensure you have:
 
 6. **Test Infrastructure**
    - Quay server running at `lab.local:8080`
+   - Administrator account on Quay (credentials defined by QUAY_USERNAME, QUAY_PASSWORD)
+   - Environment variable QUAYADMINTOKEN is set to [a valid OAuth2 token for Quay with Admin privileges](https://docs.redhat.com/en/documentation/red_hat_quay/3.15/html/red_hat_quay_api_guide/oauth2-access-tokens#creating-oauth-access-token) to create users
    - MinIO server running at `lab.local:9000` 
    - PostgreSQL database at `lab.local:5432`
    - Proper network connectivity to test endpoints
@@ -76,8 +78,8 @@ cd test
 # Using Docker (default)
 ./run_all_tests.sh
 
-# Using Podman
-CONTAINER_RUNTIME=podman ./run_all_tests.sh
+# Using Podman (with HTTP)
+CONTAINER_RUNTIME=podman CONTAINER_TLS=--tls-verify=false ./run_all_tests.sh
 ```
 
 ### Selective Testing
@@ -93,8 +95,8 @@ Run specific test suites:
 # Skip performance tests
 ./run_all_tests.sh --no-performance
 
-# Using Podman for any of the above
-CONTAINER_RUNTIME=podman ./run_all_tests.sh --integration-only
+# Using Podman for any of the above (with HTTP)
+CONTAINER_RUNTIME=podman CONTAINER_TLS=--tls-verify=false ./run_all_tests.sh --integration-only
 ```
 
 ### Individual Test Scripts

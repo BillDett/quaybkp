@@ -96,7 +96,7 @@ run_integration_tests() {
     
     if [ -f "$TEST_DIR/test_framework.sh" ]; then
         chmod +x "$TEST_DIR/test_framework.sh"
-        if bash -x "$TEST_DIR/test_framework.sh"; then
+        if "$TEST_DIR/test_framework.sh"; then
             echo -e "${GREEN}Integration tests: PASSED${NC}"
             INTEGRATION_RESULT=0
         else
