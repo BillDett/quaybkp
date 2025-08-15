@@ -2,6 +2,7 @@
 
 # Performance Tests for quaybkp
 # These tests focus on performance characteristics and scalability
+# NOTE: THESE TESTS DON'T WORK (YET)
 
 set -e
 
@@ -32,6 +33,9 @@ export S3_ENDPOINT_URL="http://lab.local:7000"
 
 # Container runtime (docker or podman)
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
+
+# Container TLS setting (for podman with HTTP)
+CONTAINER_TLS="${CONTAINER_TLS:-}"
 
 # MinIO client aliases
 BACKUP_ALIAS="backup"
@@ -116,9 +120,9 @@ create_large_test_dataset() {
         local image_tag="perf-test-$i"
         local quay_image="lab.local:8080/$TEST_NAMESPACE/$image_name:$image_tag"
         
-        if $CONTAINER_RUNTIME pull "$base_image" >/dev/null 2>&1 && \
+        if $CONTAINER_RUNTIME pull "$CONTAINER_TLS" "$base_image" >/dev/null 2>&1 && \
            $CONTAINER_RUNTIME tag "$base_image" "$quay_image" >/dev/null 2>&1 && \
-           $CONTAINER_RUNTIME push "$quay_image" >/dev/null 2>&1; then
+           $CONTAINER_RUNTIME push "$CONTAINER_TLS" "$quay_image" >/dev/null 2>&1; then
             ((images_pushed++))
             if [ $((i % 5)) -eq 0 ]; then
                 echo -n "."
@@ -417,4 +421,6 @@ main_perf() {
 }
 
 # Run main function
-main_perf "$@"
+#main_perf "$@"
+echo -e "${RED}Performance tests are not fully working yet..."
+return 1
